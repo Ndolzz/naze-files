@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Naze Files</string>
+
+    <string name="permission_title">Storage access needed</string>
+    <string name="permission_body">Naze Files needs full storage access to browse, open, and manage your files, just like a regular file manager.</string>
+    <string name="permission_grant_button">Grant access</string>
+    <string name="permission_denied_hint">You can also allow access to a specific folder instead.</string>
+    <string name="permission_pick_folder_button">Choose a folder</string>
+
+    <string name="home_title">Naze Files</string>
+    <string name="search_hint">Search</string>
+
+    <string name="sort_name_asc">Name A–Z</string>
+    <string name="sort_name_desc">Name Z–A</string>
+    <string name="sort_date_newest">Date newest</string>
+    <string name="sort_date_oldest">Date oldest</string>
+    <string name="sort_size_largest">Size largest</string>
+    <string name="sort_size_smallest">Size smallest</string>
+    <string name="sort_type">Type</string>
+    <string name="sort_folders_first">Folders first</string>
+
+    <string name="view_list">List</string>
+    <string name="view_grid">Grid</string>
+    <string name="view_compact">Compact</string>
+
+    <string name="empty_folder">This folder is empty</string>
+    <string name="error_generic">Unable to load this folder.</string>
+</resources>

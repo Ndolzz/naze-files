@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Minimal system theme: window background only. All real theming
+         (colors, typography, dark mode) is driven by Compose in
+         ui/theme/Theme.kt so it can react to the in-app Settings toggle. -->
+    <style name="Theme.NazeFiles" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/naze_background_dark</item>
+        <item name="android:statusBarColor">@color/naze_background_dark</item>
+        <item name="android:navigationBarColor">@color/naze_background_dark</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="23">false</item>
+    </style>
+</resources>

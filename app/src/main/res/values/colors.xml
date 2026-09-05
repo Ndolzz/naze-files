@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="naze_background_dark">#0F1020</color>
+    <color name="naze_blue">#5B7FFF</color>
+    <color name="naze_purple">#9B5BFF</color>
+    <color name="naze_icon_bg">#151632</color>
+</resources>
