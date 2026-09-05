@@ -23,7 +23,7 @@ fun List<FileItem>.sortedWith(preference: SortPreference): List<FileItem> {
         SortOrder.SIZE_LARGEST -> compareByDescending { it.sizeBytes }
         SortOrder.SIZE_SMALLEST -> compareBy { it.sizeBytes }
         SortOrder.TYPE -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.extension }
-            .thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
+            .thenBy { it.name }
     }
 
     val comparator = if (preference.foldersFirst) {
