@@ -22,7 +22,7 @@ fun List<FileItem>.sortedWith(preference: SortPreference): List<FileItem> {
         SortOrder.DATE_OLDEST -> compareBy { it.lastModifiedMillis }
         SortOrder.SIZE_LARGEST -> compareByDescending { it.sizeBytes }
         SortOrder.SIZE_SMALLEST -> compareBy { it.sizeBytes }
-        SortOrder.TYPE -> compareBy<FileItem>(String.CASE_INSENSITIVE_ORDER) { it.extension }
+        SortOrder.TYPE -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.extension }
             .thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
     }
 
