@@ -1,5 +1,6 @@
 package com.naze.files.ui.browser.components
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
@@ -56,7 +57,7 @@ fun BreadcrumbBar(
 private fun Modifier.clickableCrumb(enabled: Boolean, onClick: () -> Unit): Modifier =
     if (enabled) {
         this.then(
-            androidx.compose.foundation.clickable(onClick = onClick),
+            Modifier.clickable(onClick = onClick),
         )
     } else {
         this

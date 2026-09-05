@@ -69,7 +69,7 @@ fun CategoryScreen(
     LaunchedEffect(category, rootPath) {
         val found = mutableListOf<FileItem>()
         withContext(Dispatchers.IO) {
-            fun walk(dir: File) {
+            suspend fun walk(dir: File) {
                 if (dir.name == ".naze_trash") return
                 val children = dir.listFiles() ?: return
                 for (child in children) {

@@ -1,5 +1,6 @@
 package com.naze.files.ui.browser.components
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -95,4 +96,4 @@ fun FileTypePickerSheet(
 
 @Composable
 private fun Modifier.clickableRow(onClick: () -> Unit): Modifier =
-    this.then(androidx.compose.foundation.clickable(onClick = onClick))
+    this.then(Modifier.clickable(onClick = onClick))
