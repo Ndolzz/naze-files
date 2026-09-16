@@ -21,13 +21,25 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      # ubuntu-latest runners ship with the Android SDK preinstalled. The
-      # android-actions/setup-android action broke once runners forced
-      # Node 24, so install the required SDK pieces with sdkmanager directly.
+      # ubuntu-latest runners ship with the Android SDK preinstalled, but
+      # sdkmanager is NOT on PATH (the old android-actions/setup-android
+      # action added it, and that action is broken on Node 24 runners).
+      # Locate it under $ANDROID_HOME and install what the build needs.
       - name: Set up Android SDK
         run: |
-          yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager --install "platforms;android-35" "build-tools;35.0.0" > /dev/null
+          echo "ANDROID_HOME=${ANDROID_HOME:-<unset>}"
+          SDKM="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKM" ]; then
+            SDKM="$(find "${ANDROID_HOME}/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          fi
+          if [ -z "$SDKM" ] || [ ! -x "$SDKM" ]; then
+            echo "sdkmanager not found under $ANDROID_HOME" >&2
+            ls -R "${ANDROID_HOME}/cmdline-tools" || true
+            exit 1
+          fi
+          echo "Using sdkmanager: $SDKM"
+          yes | "$SDKM" --licenses > /dev/null || true
+          "$SDKM" --install "platforms;android-35" "build-tools;35.0.0"
 
       # This project intentionally ships without gradlew / gradle-wrapper.jar
       # (a binary that must be fetched from Gradle's servers — see README).
