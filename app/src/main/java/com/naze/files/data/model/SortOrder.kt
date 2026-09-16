@@ -17,7 +17,7 @@ data class SortPreference(
 fun List<FileItem>.sortedWith(preference: SortPreference): List<FileItem> {
     val baseComparator: Comparator<FileItem> = when (preference.order) {
         SortOrder.NAME_ASC -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.name }
-        SortOrder.NAME_DESC -> compareByDescending(String.CASE_INSENSITIVE_ORDER) { it.name }
+        SortOrder.NAME_DESC -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.name }.reversed()
         SortOrder.DATE_NEWEST -> compareByDescending { it.lastModifiedMillis }
         SortOrder.DATE_OLDEST -> compareBy { it.lastModifiedMillis }
         SortOrder.SIZE_LARGEST -> compareByDescending { it.sizeBytes }
