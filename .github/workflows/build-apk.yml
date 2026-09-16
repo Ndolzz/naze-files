@@ -79,7 +79,7 @@ jobs:
             tail -80 build.log
             echo '```'
           } > issue-body.md
-          gh issue create --title "Build failed — compile errors (run ${{ github.run_id }})" --body-file issue-body.md --label "" || true
+          gh issue create --title "Build failed — compile errors (run ${{ github.run_id }})" --body-file issue-body.md || true
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
