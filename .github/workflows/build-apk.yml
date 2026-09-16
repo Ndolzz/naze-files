@@ -7,6 +7,10 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
+permissions:
+  contents: read
+  issues: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -51,7 +55,31 @@ jobs:
           gradle-version: "8.7"
 
       - name: Build debug APK
-        run: gradle assembleDebug --stacktrace
+        run: |
+          set -o pipefail
+          gradle assembleDebug --stacktrace 2>&1 | tee build.log
+
+      # Debugging aid: post compile errors to a GitHub issue so they are
+      # readable without log-download access. Remove once the build is green.
+      - name: Report build errors as issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "## Compile errors (run [#${{ github.run_id }}](https://github.com/Ndolzz/naze-files/actions/runs/${{ github.run_id }}))"
+            echo ""
+            echo '```'
+            grep -E "^e: |error: |FAILURE" build.log | head -60 || echo "(no error lines matched)"
+            echo '```'
+            echo ""
+            echo "## Last 80 lines of build log"
+            echo ""
+            echo '```'
+            tail -80 build.log
+            echo '```'
+          } > issue-body.md
+          gh issue create --title "Build failed — compile errors (run ${{ github.run_id }})" --body-file issue-body.md --label "" || true
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
