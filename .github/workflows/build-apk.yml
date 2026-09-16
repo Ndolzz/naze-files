@@ -16,13 +16,18 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
 
+      # ubuntu-latest runners ship with the Android SDK preinstalled. The
+      # android-actions/setup-android action broke once runners forced
+      # Node 24, so install the required SDK pieces with sdkmanager directly.
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager --install "platforms;android-35" "build-tools;35.0.0" > /dev/null
 
       # This project intentionally ships without gradlew / gradle-wrapper.jar
       # (a binary that must be fetched from Gradle's servers — see README).
