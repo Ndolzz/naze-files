@@ -9,10 +9,13 @@ import android.os.Parcelable
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -20,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.naze.files.data.archive.ArchiveRepository
 import com.naze.files.data.favorites.FavoritesRepository
@@ -51,6 +55,7 @@ import com.naze.files.ui.settings.SettingsScreen
 import com.naze.files.ui.storage.StorageAnalyzerScreen
 import com.naze.files.ui.theme.NazeFilesTheme
 import com.naze.files.ui.theme.NazeThemeMode
+import com.naze.files.ui.viewer.ApkInstallerScreen
 import com.naze.files.ui.viewer.AudioPlayerScreen
 import com.naze.files.ui.viewer.FileInfoDialog
 import com.naze.files.ui.viewer.ImageViewerScreen
@@ -60,6 +65,9 @@ import com.naze.files.ui.viewer.UnsupportedViewerScreen
 import com.naze.files.ui.viewer.VideoPlayerScreen
 import com.naze.files.util.ContentUriUtils
 import com.naze.files.util.buildOpenWithIntent
+import com.naze.files.util.buildInstallApkIntent
+import com.naze.files.util.buildInstallUnknownAppsSettingsIntent
+import com.naze.files.util.canInstallPackages
 import com.naze.files.util.buildShareIntent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -81,6 +89,7 @@ private sealed class Screen {
     data class AudioViewer(val item: FileItem, val playlist: List<FileItem>, val startIndex: Int) : Screen()
     data class VideoViewer(val item: FileItem) : Screen()
     data class ArchiveViewer(val item: FileItem) : Screen()
+    data class ApkInstaller(val item: FileItem) : Screen()
     data class UnsupportedViewer(val item: FileItem, val reason: String) : Screen()
 }
 
@@ -135,6 +144,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Draws behind both system bars on every OS version this app supports
+        // (and is mandatory anyway on API 35+, where the platform enforces
+        // edge-to-edge regardless of this call). Every screen is expected to
+        // claim back space it needs via WindowInsets - see Scaffold's default
+        // contentWindowInsets, and the explicit systemBarsPadding()/
+        // navigationBarsPadding() calls on the few screens that don't use
+        // Scaffold or that supply their own bottom bar.
+        enableEdgeToEdge()
         storageAccessManager = StorageAccessManager(this)
         if (intent?.action in setOf(Intent.ACTION_VIEW, Intent.ACTION_SEND, Intent.ACTION_SEND_MULTIPLE)) {
             pendingIntentState.value = intent
@@ -161,6 +178,21 @@ class MainActivity : ComponentActivity() {
 
             val settingsRepository = remember { SettingsRepository(applicationContext) }
             val settings by settingsRepository.settings.collectAsState(initial = com.naze.files.data.settings.NazeSettings())
+
+            // Naze Files' theme is a user setting independent of the OS's own
+            // dark/light mode, so the status/navigation bar icon color has to
+            // be driven off that same setting rather than left at whatever
+            // enableEdgeToEdge() guessed from system config at cold start.
+            val useDarkTheme = when (settings.themeMode) {
+                NazeThemeMode.Dark -> true
+                NazeThemeMode.Light -> false
+                NazeThemeMode.System -> isSystemInDarkTheme()
+            }
+            SideEffect {
+                val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+                insetsController.isAppearanceLightStatusBars = !useDarkTheme
+                insetsController.isAppearanceLightNavigationBars = !useDarkTheme
+            }
 
             NazeFilesTheme(themeMode = settings.themeMode) {
                 Surface(modifier = Modifier.fillMaxSize()) {
@@ -211,6 +243,22 @@ class MainActivity : ComponentActivity() {
                                 startActivity(buildOpenWithIntent(this@MainActivity, File(item.absolutePath), item.mimeType))
                             }
 
+                            fun installApkItem(item: FileItem) {
+                                if (!canInstallPackages(this@MainActivity)) {
+                                    // No "install unknown apps" grant yet for Naze Files - send
+                                    // the user straight to that toggle instead of silently
+                                    // failing, then let them come back and tap Install again.
+                                    startActivity(buildInstallUnknownAppsSettingsIntent(this@MainActivity))
+                                    Toast.makeText(
+                                        this@MainActivity,
+                                        "Allow Naze Files to install apps, then come back and tap Install again",
+                                        Toast.LENGTH_LONG,
+                                    ).show()
+                                    return
+                                }
+                                startActivity(buildInstallApkIntent(this@MainActivity, File(item.absolutePath)))
+                            }
+
                             fun openFile(item: FileItem) {
                                 scope.launch {
                                     val route = ViewerRouter.route(item)
@@ -223,6 +271,7 @@ class MainActivity : ComponentActivity() {
                                         is ViewerRoute.Pdf -> screen = Screen.PdfViewer(item)
                                         is ViewerRoute.Video -> screen = Screen.VideoViewer(item)
                                         is ViewerRoute.Archive -> screen = Screen.ArchiveViewer(item)
+                                        is ViewerRoute.Apk -> screen = Screen.ApkInstaller(item)
                                         is ViewerRoute.Audio -> {
                                             if (Build.VERSION.SDK_INT >= 33) {
                                                 notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -460,6 +509,19 @@ class MainActivity : ComponentActivity() {
                                     UnsupportedViewerScreen(
                                         item = currentScreen.item,
                                         reason = currentScreen.reason,
+                                        onOpenWith = { openWithItem(currentScreen.item) },
+                                        onShare = { shareItem(currentScreen.item) },
+                                        onShowInfo = { infoTarget = currentScreen.item },
+                                        onDelete = { deleteTarget = currentScreen.item },
+                                        onNavigateBack = { screen = Screen.Browser },
+                                    )
+                                }
+
+                                is Screen.ApkInstaller -> {
+                                    androidx.activity.compose.BackHandler(enabled = true) { screen = Screen.Browser }
+                                    ApkInstallerScreen(
+                                        item = currentScreen.item,
+                                        onInstall = { installApkItem(currentScreen.item) },
                                         onOpenWith = { openWithItem(currentScreen.item) },
                                         onShare = { shareItem(currentScreen.item) },
                                         onShowInfo = { infoTarget = currentScreen.item },
