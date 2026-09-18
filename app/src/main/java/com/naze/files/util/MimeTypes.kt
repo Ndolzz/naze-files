@@ -6,12 +6,11 @@ import android.webkit.MimeTypeMap
  * Stock [MimeTypeMap] is missing a handful of extensions that matter for a
  * file manager - most importantly "apk": on stock Android,
  * `MimeTypeMap.getSingleton().getMimeTypeFromExtension("apk")` returns
- * `null`, because .apk was never added to the system's mime.types table.
+ * `null`, because .apk was never added to the system's MIME table.
  *
- * That null then falls back to a wildcard "*\/*" wherever this app builds an
- * ACTION_VIEW/install intent, which is why tapping an APK never reliably
- * offers - or launches - the Package Installer: the intent isn't typed as
- * an installable package, so the OS has no reason to route it there.
+ * The null value can otherwise fall back to a wildcard MIME type when the app
+ * builds an ACTION_VIEW/install intent, preventing Android from routing the
+ * intent to the Package Installer.
  *
  * Every place in the app that resolves a MIME type from a file extension
  * goes through this one function so a fix here fixes it everywhere at once.
