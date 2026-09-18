@@ -32,6 +32,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -47,6 +48,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.naze.files.data.model.FileItem
+import kotlinx.coroutines.launch
 import java.io.File
 
 private val speedOptions = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
@@ -61,6 +63,7 @@ fun VideoPlayerScreen(
     onNavigateBack: () -> Unit,
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var chromeVisible by remember { mutableStateOf(true) }
     var menuExpanded by remember { mutableStateOf(false) }
     var speedMenuExpanded by remember { mutableStateOf(false) }
@@ -183,22 +186,28 @@ fun VideoPlayerScreen(
                             isZoomed = { false },
                             onTransform = { _, _ -> },
                             onDismissDrag = { deltaY ->
-                                dismissOffsetY.snapTo((dismissOffsetY.value + deltaY).coerceAtLeast(0f))
+                                scope.launch {
+                                    dismissOffsetY.snapTo((dismissOffsetY.value + deltaY).coerceAtLeast(0f))
+                                }
                             },
                             onDismissRelease = { velocityY ->
                                 val flingingDown = velocityY > 1200f
-                                if (dismissOffsetY.value > dismissThresholdPx || flingingDown) {
-                                    dismissOffsetY.animateTo(screenHeightPx, animationSpec = tween(200))
-                                    onNavigateBack()
-                                } else {
-                                    dismissOffsetY.animateTo(
-                                        0f,
-                                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
-                                    )
+                                scope.launch {
+                                    if (dismissOffsetY.value > dismissThresholdPx || flingingDown) {
+                                        dismissOffsetY.animateTo(screenHeightPx, animationSpec = tween(200))
+                                        onNavigateBack()
+                                    } else {
+                                        dismissOffsetY.animateTo(
+                                            0f,
+                                            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+                                        )
+                                    }
                                 }
                             },
                             onDismissCancelled = {
-                                dismissOffsetY.animateTo(0f, animationSpec = spring())
+                                scope.launch {
+                                    dismissOffsetY.animateTo(0f, animationSpec = spring())
+                                }
                             },
                             onTap = {},
                         )
