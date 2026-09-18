@@ -6,6 +6,7 @@ import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerInputScope
+import androidx.compose.ui.input.pointer.awaitPointerEvent
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.input.pointer.util.VelocityTracker
@@ -13,42 +14,14 @@ import kotlin.math.abs
 
 /**
  * One gesture recognizer shared by [ImageViewerScreen] and
- * [VideoPlayerScreen] so swipe-down-to-dismiss behaves identically in both:
- *
- * - 2+ fingers down -> always routed to [onTransform] (pinch zoom + pan).
- * - 1 finger, [isZoomed] true (a photo the user has zoomed into) -> also
- *   [onTransform], as a plain pan, so panning a zoomed photo can never be
- *   mistaken for a dismiss.
- * - 1 finger, not zoomed: nothing is decided until the drag clears the
- *   platform's own touch slop ([PointerInputScope.viewConfiguration], so it
- *   scales with device density like every other gesture in the app, not a
- *   hardcoded pixel count). Once it does, the *dominant* axis wins:
- *     - vertical and downward -> committed as a dismiss: [onDismissDrag]
- *       fires every frame with the incremental delta, [onDismissRelease]
- *       fires once on lift-off with the fling velocity (px/s) so the caller
- *       decides whether the drag crossed its own threshold.
- *     - anything else (upward, or horizontal-dominant, e.g. dragging the
- *       video scrubber) -> never consumed, so every event - past and
- *       future, in this same gesture - still reaches whatever sits
- *       underneath, letting ExoPlayer's own tap-to-toggle-controls and
- *       scrubber keep working when this sits on an overlay above
- *       [VideoPlayerScreen]'s PlayerView.
- * - If a second finger comes down mid dismiss-drag, the drag is abandoned
- *   via [onDismissCancelled] and control passes to [onTransform] instead.
- * - A gesture whose drag never cleared the slop in the first place - a
- *   tap, or the couple of px of jitter a real finger always has - is
- *   reported through [onTap].
- *
- * Nothing here touches storage, decodes anything, or does other frame-
- * costly work - it only ever forwards deltas/velocity for the caller to
- * apply as a transform (translation/scale/alpha).
+ * [VideoPlayerScreen] so swipe-down-to-dismiss behaves identically in both.
  */
 suspend fun PointerInputScope.detectSwipeToDismissGesture(
     isZoomed: () -> Boolean,
     onTransform: (zoomChange: Float, panChange: Offset) -> Unit,
-    onDismissDrag: suspend (deltaY: Float) -> Unit,
-    onDismissRelease: suspend (velocityY: Float) -> Unit,
-    onDismissCancelled: suspend () -> Unit,
+    onDismissDrag: (deltaY: Float) -> Unit,
+    onDismissRelease: (velocityY: Float) -> Unit,
+    onDismissCancelled: () -> Unit,
     onTap: () -> Unit,
 ) {
     val slop = viewConfiguration.touchSlop
@@ -59,7 +32,7 @@ suspend fun PointerInputScope.detectSwipeToDismissGesture(
         velocityTracker.addPosition(down.uptimeMillis, down.position)
 
         var isDismissing = false
-        var directionSettled = false // true once a 1-finger drag has cleared slop and been classified
+        var directionSettled = false
         var pendingX = 0f
         var pendingY = 0f
 
@@ -99,10 +72,6 @@ suspend fun PointerInputScope.detectSwipeToDismissGesture(
                             onDismissDrag(pendingY)
                             change.consume()
                         }
-                        // else: horizontal-dominant or upward - genuinely a
-                        // different gesture (e.g. scrubbing), not a dismiss
-                        // and not a tap either. Deliberately never consumed
-                        // from here on, in either branch above or below.
                     }
                 } else if (isDismissing) {
                     onDismissDrag(drag.y)
@@ -116,7 +85,6 @@ suspend fun PointerInputScope.detectSwipeToDismissGesture(
         if (isDismissing) {
             onDismissRelease(velocityTracker.calculateVelocity().y)
         } else if (!directionSettled) {
-            // Never cleared the slop in any direction - a genuine tap.
             onTap()
         }
     }
