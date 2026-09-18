@@ -14,6 +14,7 @@ sealed class ViewerRoute {
     data class Audio(val item: FileItem) : ViewerRoute()
     data class Video(val item: FileItem) : ViewerRoute()
     data class Archive(val item: FileItem) : ViewerRoute()
+    data class Apk(val item: FileItem) : ViewerRoute()
     data class Unsupported(val item: FileItem, val reason: String) : ViewerRoute()
 }
 
@@ -61,7 +62,7 @@ object ViewerRouter {
             } else {
                 ViewerRoute.Unsupported(item, "Only ZIP archives can be browsed in-app right now - use Open With for other archive formats.")
             }
-            FileCategory.APK -> ViewerRoute.Unsupported(item, "APK details aren't available yet.")
+            FileCategory.APK -> ViewerRoute.Apk(item)
             FileCategory.FOLDER -> ViewerRoute.Unsupported(item, "This is a folder")
         }
     }

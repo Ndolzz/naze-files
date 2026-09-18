@@ -3,6 +3,7 @@ package com.naze.files.ui.browser.components
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Archive
@@ -27,10 +28,14 @@ fun SelectionToolbar(
     onCompress: () -> Unit,
     onDelete: () -> Unit,
 ) {
+    // This is a Scaffold bottomBar, and Scaffold does not pad a custom
+    // bottomBar for the nav bar on its own - the bar has to claim that inset
+    // itself (once, here), same as Material3's own NavigationBar does.
     Surface(tonalElevation = 3.dp) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .navigationBarsPadding()
                 .padding(horizontal = 8.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
         ) {

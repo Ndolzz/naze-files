@@ -3,9 +3,11 @@ package com.naze.files.ui.viewer
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -43,7 +45,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
@@ -78,6 +82,18 @@ fun ImageViewerScreen(
     var menuExpanded by remember { mutableStateOf(false) }
     var reloadKey by remember { mutableStateOf(0) }
     var isSaving by remember { mutableStateOf(false) }
+
+    // Swipe-down-to-dismiss: dismissOffsetY tracks the finger 1:1 while
+    // dragging, then either springs back to 0 or animates out to hand off
+    // to onNavigateBack - see detectSwipeToDismissGesture below. The
+    // threshold is a fraction of the actual screen height (from
+    // LocalConfiguration, so it adapts to portrait/landscape and any
+    // device size) rather than a fixed pixel count.
+    val density = LocalDensity.current
+    val screenHeightPx = with(density) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
+    val dismissThresholdPx = screenHeightPx * 0.25f
+    val dismissOffsetY = remember { Animatable(0f) }
+    val dismissProgress = (dismissOffsetY.value / dismissThresholdPx).coerceIn(0f, 1f)
 
     val imageRequest = remember(item.absolutePath, reloadKey) {
         ImageRequest.Builder(context)
@@ -156,17 +172,38 @@ fun ImageViewerScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black)
+                // Background fades out as the drag approaches the dismiss
+                // threshold, capped so it never goes fully transparent.
+                .background(Color.Black.copy(alpha = 1f - dismissProgress * 0.85f))
                 .padding(if (chromeVisible) padding else PaddingValues(0.dp))
                 .pointerInput(Unit) {
-                    detectTransformGestures { _, pan, zoom, _ ->
-                        scale = (scale * zoom).coerceIn(1f, 6f)
-                        offsetX += pan.x
-                        offsetY += pan.y
-                    }
-                }
-                .pointerInput(Unit) {
-                    detectTapGestures(onTap = { chromeVisible = !chromeVisible })
+                    detectSwipeToDismissGesture(
+                        isZoomed = { scale > 1.02f },
+                        onTransform = { zoomChange, panChange ->
+                            scale = (scale * zoomChange).coerceIn(1f, 6f)
+                            offsetX += panChange.x
+                            offsetY += panChange.y
+                        },
+                        onDismissDrag = { deltaY ->
+                            dismissOffsetY.snapTo((dismissOffsetY.value + deltaY).coerceAtLeast(0f))
+                        },
+                        onDismissRelease = { velocityY ->
+                            val flingingDown = velocityY > 1200f
+                            if (dismissOffsetY.value > dismissThresholdPx || flingingDown) {
+                                dismissOffsetY.animateTo(screenHeightPx, animationSpec = tween(200))
+                                onNavigateBack()
+                            } else {
+                                dismissOffsetY.animateTo(
+                                    0f,
+                                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+                                )
+                            }
+                        },
+                        onDismissCancelled = {
+                            dismissOffsetY.animateTo(0f, animationSpec = spring())
+                        },
+                        onTap = { chromeVisible = !chromeVisible },
+                    )
                 },
             contentAlignment = Alignment.Center,
         ) {
@@ -176,10 +213,10 @@ fun ImageViewerScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer(
-                        scaleX = scale,
-                        scaleY = scale,
+                        scaleX = scale * (1f - dismissProgress * 0.15f),
+                        scaleY = scale * (1f - dismissProgress * 0.15f),
                         translationX = offsetX,
-                        translationY = offsetY,
+                        translationY = offsetY + dismissOffsetY.value,
                         rotationZ = rotationDegrees.toFloat(),
                     ),
             )

@@ -2,6 +2,10 @@ package com.naze.files.ui.viewer
 
 import android.net.Uri
 import android.view.ViewGroup
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -31,7 +35,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -57,6 +65,14 @@ fun VideoPlayerScreen(
     var menuExpanded by remember { mutableStateOf(false) }
     var speedMenuExpanded by remember { mutableStateOf(false) }
     var playbackSpeed by remember { mutableStateOf(1f) }
+
+    // Swipe-down-to-dismiss - same recognizer and threshold logic as the
+    // image viewer, see detectSwipeToDismissGesture.
+    val density = LocalDensity.current
+    val screenHeightPx = with(density) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
+    val dismissThresholdPx = screenHeightPx * 0.25f
+    val dismissOffsetY = remember { Animatable(0f) }
+    val dismissProgress = (dismissOffsetY.value / dismissThresholdPx).coerceIn(0f, 1f)
 
     val player = remember {
         ExoPlayer.Builder(context).build().apply {
@@ -127,11 +143,17 @@ fun VideoPlayerScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black)
+                .background(Color.Black.copy(alpha = 1f - dismissProgress * 0.85f))
                 .padding(if (chromeVisible) padding else PaddingValues(0.dp)),
         ) {
             AndroidView(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer(
+                        translationY = dismissOffsetY.value,
+                        scaleX = 1f - dismissProgress * 0.15f,
+                        scaleY = 1f - dismissProgress * 0.15f,
+                    ),
                 factory = { ctx ->
                     PlayerView(ctx).apply {
                         this.player = player
@@ -146,6 +168,41 @@ fun VideoPlayerScreen(
                         )
                     }
                 },
+            )
+            // Transparent overlay, drawn on top of the PlayerView, so it gets
+            // first look at touches (see detectSwipeToDismissGesture). It
+            // only ever consumes events once a vertical-dominant downward
+            // drag is confirmed - a tap, or a horizontal drag on the
+            // scrubber, is never consumed and falls straight through to
+            // ExoPlayer's own controls underneath.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) {
+                        detectSwipeToDismissGesture(
+                            isZoomed = { false },
+                            onTransform = { _, _ -> },
+                            onDismissDrag = { deltaY ->
+                                dismissOffsetY.snapTo((dismissOffsetY.value + deltaY).coerceAtLeast(0f))
+                            },
+                            onDismissRelease = { velocityY ->
+                                val flingingDown = velocityY > 1200f
+                                if (dismissOffsetY.value > dismissThresholdPx || flingingDown) {
+                                    dismissOffsetY.animateTo(screenHeightPx, animationSpec = tween(200))
+                                    onNavigateBack()
+                                } else {
+                                    dismissOffsetY.animateTo(
+                                        0f,
+                                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+                                    )
+                                }
+                            },
+                            onDismissCancelled = {
+                                dismissOffsetY.animateTo(0f, animationSpec = spring())
+                            },
+                            onTap = {},
+                        )
+                    },
             )
         }
     }

@@ -1,5 +1,6 @@
 package com.naze.files.data.operations
 
+import com.naze.files.data.repository.FileIndexRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -181,7 +182,13 @@ class FileOperationsRepository {
 
     private suspend fun <T> ioResult(block: suspend () -> T): Result<T> = withContext(Dispatchers.IO) {
         try {
-            Result.success(block())
+            val value = block()
+            // This class only ever mutates storage (copy/move/rename/create/delete),
+            // so every successful call here invalidates the shared category/analyzer
+            // index — otherwise a deleted or renamed file could keep showing up in a
+            // category list for up to the cache's TTL.
+            FileIndexRepository.invalidate()
+            Result.success(value)
         } catch (e: CancellationException) {
             throw e // never swallow cancellation - let structured concurrency propagate it
         } catch (e: Exception) {

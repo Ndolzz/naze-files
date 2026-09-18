@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -23,6 +24,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -32,15 +34,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.naze.files.data.model.FileCategory
-import com.naze.files.data.model.FileItem
-import com.naze.files.ui.theme.NazeBlue
-import com.naze.files.ui.theme.NazePurple
+import com.naze.files.data.repository.FileIndexRepository
 import com.naze.files.util.formatFileSize
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.withContext
-import java.io.File
+import kotlinx.coroutines.CancellationException
+import java.io.IOException
 
 private data class CategoryBreakdown(val category: FileCategory, val bytes: Long)
 
@@ -64,33 +61,31 @@ fun StorageAnalyzerScreen(
     var totalBytes by remember { mutableStateOf(0L) }
     var freeBytes by remember { mutableStateOf(0L) }
     var breakdown by remember { mutableStateOf<List<CategoryBreakdown>?>(null) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var retryTick by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(rootPath) {
+    LaunchedEffect(rootPath, retryTick) {
+        errorMessage = null
         val stat = StatFs(rootPath)
         totalBytes = stat.totalBytes
         freeBytes = stat.availableBytes
 
-        val totals = mutableMapOf<FileCategory, Long>()
-        withContext(Dispatchers.IO) {
-            suspend fun walk(dir: File) {
-                if (dir.name == ".naze_trash") return
-                val children = dir.listFiles() ?: return
-                for (child in children) {
-                    currentCoroutineContext().ensureActive()
-                    if (child.isDirectory) {
-                        walk(child)
-                    } else {
-                        val syntheticItem = FileItem(
-                            child.name, child.absolutePath, false, child.length(), child.lastModified(), false, null, true, true,
-                        )
-                        val category = FileCategory.fromItem(syntheticItem)
-                        totals[category] = (totals[category] ?: 0L) + child.length()
-                    }
-                }
+        try {
+            // Reuses the same shared, cached index every category screen
+            // reads from — no second independent storage walk here.
+            val index = FileIndexRepository.getIndex(rootPath, forceRefresh = retryTick > 0)
+            val totals = mutableMapOf<FileCategory, Long>()
+            for (item in index.files) {
+                totals[item.category] = (totals[item.category] ?: 0L) + item.sizeBytes
             }
-            walk(File(rootPath))
+            breakdown = totals.entries.map { CategoryBreakdown(it.key, it.value) }.sortedByDescending { it.bytes }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: IOException) {
+            errorMessage = e.message ?: "Unable to read storage"
+        } catch (e: Exception) {
+            errorMessage = e.message ?: "Unable to read storage"
         }
-        breakdown = totals.entries.map { CategoryBreakdown(it.key, it.value) }.sortedByDescending { it.bytes }
     }
 
     Scaffold(
@@ -138,7 +133,23 @@ fun StorageAnalyzerScreen(
             )
 
             val currentBreakdown = breakdown
-            if (currentBreakdown == null) {
+            val currentError = errorMessage
+            if (currentError != null) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        text = currentError,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 12.dp),
+                    )
+                    Button(onClick = { retryTick++ }) { Text("Retry") }
+                }
+            } else if (currentBreakdown == null) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()

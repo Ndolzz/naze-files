@@ -1,7 +1,7 @@
 package com.naze.files.data.repository
 
-import android.webkit.MimeTypeMap
 import com.naze.files.data.model.FileItem
+import com.naze.files.util.resolveMimeType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -46,7 +46,7 @@ class FileRepositoryImpl : FileRepository {
             null
         } else {
             val ext = name.substringAfterLast('.', "").lowercase()
-            MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext)
+            resolveMimeType(ext)
         }
         return FileItem(
             name = name,
