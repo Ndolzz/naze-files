@@ -41,6 +41,9 @@ import java.io.IOException
 
 private data class CategoryBreakdown(val category: FileCategory, val bytes: Long)
 
+private val NazeBlue = Color(0xFF5BC8FF)
+private val NazePurple = Color(0xFF8B5CF6)
+
 private val categoryColors = mapOf(
     FileCategory.IMAGE to NazeBlue,
     FileCategory.VIDEO to NazePurple,
