@@ -83,12 +83,6 @@ fun ImageViewerScreen(
     var reloadKey by remember { mutableStateOf(0) }
     var isSaving by remember { mutableStateOf(false) }
 
-    // Swipe-down-to-dismiss: dismissOffsetY tracks the finger 1:1 while
-    // dragging, then either springs back to 0 or animates out to hand off
-    // to onNavigateBack - see detectSwipeToDismissGesture below. The
-    // threshold is a fraction of the actual screen height (from
-    // LocalConfiguration, so it adapts to portrait/landscape and any
-    // device size) rather than a fixed pixel count.
     val density = LocalDensity.current
     val screenHeightPx = with(density) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
     val dismissThresholdPx = screenHeightPx * 0.25f
@@ -172,8 +166,6 @@ fun ImageViewerScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                // Background fades out as the drag approaches the dismiss
-                // threshold, capped so it never goes fully transparent.
                 .background(Color.Black.copy(alpha = 1f - dismissProgress * 0.85f))
                 .padding(if (chromeVisible) padding else PaddingValues(0.dp))
                 .pointerInput(Unit) {
@@ -185,22 +177,28 @@ fun ImageViewerScreen(
                             offsetY += panChange.y
                         },
                         onDismissDrag = { deltaY ->
-                            dismissOffsetY.snapTo((dismissOffsetY.value + deltaY).coerceAtLeast(0f))
+                            scope.launch {
+                                dismissOffsetY.snapTo((dismissOffsetY.value + deltaY).coerceAtLeast(0f))
+                            }
                         },
                         onDismissRelease = { velocityY ->
                             val flingingDown = velocityY > 1200f
-                            if (dismissOffsetY.value > dismissThresholdPx || flingingDown) {
-                                dismissOffsetY.animateTo(screenHeightPx, animationSpec = tween(200))
-                                onNavigateBack()
-                            } else {
-                                dismissOffsetY.animateTo(
-                                    0f,
-                                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
-                                )
+                            scope.launch {
+                                if (dismissOffsetY.value > dismissThresholdPx || flingingDown) {
+                                    dismissOffsetY.animateTo(screenHeightPx, animationSpec = tween(200))
+                                    onNavigateBack()
+                                } else {
+                                    dismissOffsetY.animateTo(
+                                        0f,
+                                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+                                    )
+                                }
                             }
                         },
                         onDismissCancelled = {
-                            dismissOffsetY.animateTo(0f, animationSpec = spring())
+                            scope.launch {
+                                dismissOffsetY.animateTo(0f, animationSpec = spring())
+                            }
                         },
                         onTap = { chromeVisible = !chromeVisible },
                     )
