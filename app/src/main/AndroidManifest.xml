@@ -22,6 +22,13 @@
         android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
         tools:ignore="ScopedStorage" />
 
+    <!-- Required since API 26 for Naze Files to even appear under Settings >
+         Apps > Special access > Install unknown apps. Without this declared,
+         the OS has no "source" to grant that toggle to, and any APK install
+         attempt launched from this app is refused before the user ever sees
+         a confirmation screen. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <!-- Background audio playback: foreground service + its notification (Phase 4) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
